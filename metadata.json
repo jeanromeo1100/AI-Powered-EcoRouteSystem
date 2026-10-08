@@ -1,0 +1,6 @@
+{
+  "name": "AI-Powered EcoRoute – Integrated Urban Waste Management Platform System",
+  "description": "Smart Waste Collection, Route Optimization, Billing & Landfill Tracking Platform",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
