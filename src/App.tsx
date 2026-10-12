@@ -93,6 +93,7 @@ import { NdubaLandfillEnhanced } from "./NdubaLandfillEnhanced"
 import { ReportsEnhanced } from "./ReportsEnhanced"
 import { AuditLogEnhanced } from "./AuditLogEnhanced"
 import { AdminSystemEnhanced } from "./AdminSystemEnhanced"
+import { generateReceiptPdf, generatePdfDocument } from "./utils/pdfGenerator"
 
 const PublicSite = lazy(() => import("./PublicSite"))
 
@@ -127,7 +128,6 @@ const roleConfig: Record<Role, {
       { label: "Users & Roles", icon: UsersRound },
       { label: "System Configuration", icon: Settings },
       { label: "Zones / Collection Parameters", icon: MapPin },
-      { label: "Activity Log", icon: LockKeyhole },
       { label: "Reports", icon: FileText },
       { label: "Communication", icon: MessageSquareText },
       { label: "AI Assistant", icon: Sparkles },
@@ -178,7 +178,6 @@ const roleConfig: Record<Role, {
       { label: "Salaries & Payroll", icon: CreditCard },
       { label: "Financial Reports", icon: Activity },
       { label: "Communication", icon: MessageSquareText },
-      { label: "Activity Log", icon: LockKeyhole },
       { label: "Profile & Settings", icon: UserRound },
     ],
   },
@@ -199,7 +198,6 @@ const roleConfig: Record<Role, {
       { label: "Trip Management", icon: Navigation },
       { label: "Nduba Landfill", icon: Truck },
       { label: "Communication", icon: MessageSquareText },
-      { label: "Activity Log", icon: LockKeyhole },
       { label: "Profile & Settings", icon: UserRound },
     ],
   },
@@ -217,7 +215,6 @@ const roleConfig: Record<Role, {
       { label: "My Schedule / History", icon: Clock3 },
       { label: "My Payments / Invoices", icon: ReceiptText },
       { label: "Communication", icon: MessageSquareText },
-      { label: "Activity Log", icon: LockKeyhole },
       { label: "Request Service", icon: PackageCheck },
       { label: "AI Assistant", icon: Sparkles },
       { label: "Profile & Settings", icon: UserRound },
@@ -1379,22 +1376,16 @@ function CustomerPayment() {
     window.setTimeout(() => setStage(4), 1400)
   }
   const downloadReceipt = () => {
-    const receipt = [
-      "ECOROUTE PAYMENT RECEIPT",
-      `Transaction ID: ${transactionId}`,
-      `Invoice: ${invoice}`,
-      `Customer: ${customerName}`,
-      `Date/time: ${paidAt}`,
-      `Payment method: ${method}`,
-      "Amount: RWF 6,000",
-      "Status: Paid",
-    ].join("\n")
-    const url = URL.createObjectURL(new Blob([receipt], { type: "text/plain" }))
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `EcoRoute-Receipt-${transactionId}.txt`
-    link.click()
-    URL.revokeObjectURL(url)
+    generateReceiptPdf({
+      receiptNo: transactionId,
+      customerName,
+      customerId: "CUS-2048",
+      amount: "RWF 6,000",
+      period: "October 2026",
+      paymentMethod: method,
+      reference: transactionId,
+      date: paidAt,
+    })
   }
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -1824,19 +1815,17 @@ function CustomerPaymentHistoryPage() {
       (!date || item[4] === date),
   )
   const receipt = (row: string[]) => {
-    const url = URL.createObjectURL(
-      new Blob(
-        [
-          `EcoRoute Receipt\nTransaction: ${row[0]}\nInvoice: ${row[1]}\nAmount: ${row[2]}\nMethod: ${row[3]}\nDate: ${row[4]}\nStatus: ${row[5]}`,
-        ],
-        { type: "text/plain" },
-      ),
-    )
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `${row[0]}-receipt.txt`
-    link.click()
-    URL.revokeObjectURL(url)
+    generateReceiptPdf({
+      receiptNo: row[0],
+      customerName: "Jean Romeo",
+      customerId: "CUS-2048",
+      amount: row[2],
+      period: "October 2026",
+      paymentMethod: row[3],
+      reference: row[0],
+      date: row[4],
+      status: row[5],
+    })
   }
   return (
     <div className="space-y-4">
@@ -1967,22 +1956,29 @@ function CustomerBillingPage({ onPage }: { onPage: (page: string) => void }) {
     ["INV-00110", "July 2026", "RWF 6,000", "10 August 2026", "Paid"],
   ]
   const download = (invoice: string[]) => {
-    const text = [
-      "ECOROUTE WASTE COLLECTION INVOICE",
-      `Invoice: ${invoice[0]}`,
-      "Customer: Jean Romeo",
-      "Customer ID: CUS-2048",
-      `Period: ${invoice[1]}`,
-      `Amount: ${invoice[2]}`,
-      `Due: ${invoice[3]}`,
-      `Status: ${invoice[4]}`,
-    ].join("\n")
-    const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }))
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `${invoice[0]}-invoice.txt`
-    link.click()
-    URL.revokeObjectURL(url)
+    generatePdfDocument({
+      title: `SERVICE INVOICE: ${invoice[0]}`,
+      subtitle: "Smart Waste Collection, Route, Optimization",
+      filename: `${invoice[0]}-invoice.pdf`,
+      generatedBy: "Jean Romeo",
+      role: "Customer",
+      headers: ["Invoice Item", "Details"],
+      rows: [
+        ["Invoice Number", invoice[0]],
+        ["Customer Name", "Jean Romeo"],
+        ["Customer ID", "CUS-2048"],
+        ["Billing Period", invoice[1]],
+        ["Amount Due", invoice[2]],
+        ["Due Date", invoice[3]],
+        ["Payment Status", invoice[4]],
+      ],
+      summaryCards: [
+        { label: "Invoice", value: invoice[0] },
+        { label: "Amount", value: invoice[2] },
+        { label: "Status", value: invoice[4] },
+      ],
+      notes: "Pay via MTN MoMo (*182*8*1*0248#) or Airtel Money using your Customer ID.",
+    })
   }
   return (
     <div className="space-y-4">
@@ -5490,7 +5486,7 @@ function ManagerStaffPage() {
     task: "",
   })
   const addStaff = () => {
-    if (!form.name || !form.phone || !form.email || form.password.length < 8)
+    if (!form.name || !form.phone || !form.email || form.password.length < 6)
       return
     const isFinance = form.category === "Finance"
     const assignment =
@@ -5699,7 +5695,7 @@ function ManagerStaffPage() {
               <input
                 className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm"
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="At least 8 characters"
+                placeholder="At least 6 characters"
                 type="password"
               />
             </label>
@@ -8407,10 +8403,12 @@ function ModulePage({
   role,
   page,
   onPage,
+  profile,
 }: {
   role: Role
   page: string
   onPage: (page: string) => void
+  profile?: SessionProfile | null
 }) {
   const [query, setQuery] = useState("")
   const requirements = pageRequirements[page] ?? [
@@ -8420,11 +8418,31 @@ function ModulePage({
     "Available actions",
   ]
   if (page === "Profile & Settings")
-    return <UnifiedProfileSettings role={role} />
+    return <UnifiedProfileSettings role={role} profile={profile} />
   if (page === "Communication")
     return <SmsCommunicationEnhanced />
-  if (page === "Activity Log")
-    return <AuditLogEnhanced role={role} />
+  if (page === "Activity Log") {
+    if (role !== "Manager") {
+      return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm max-w-xl mx-auto my-8">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+            <LockKeyhole size={24} />
+          </div>
+          <h3 className="mt-4 text-lg font-bold text-slate-900">Activity Log Access Restricted</h3>
+          <p className="mt-2 text-sm text-slate-600">
+            System activity logs and operational audit trails are reserved exclusively for operations managers.
+          </p>
+          <button
+            onClick={() => onPage("Dashboard")}
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 transition"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      )
+    }
+    return <AuditLogEnhanced role={role} profile={profile} />
+  }
   if (role === "Admin" && page === "Companies")
     return (
       <AdminCompanies
@@ -8724,7 +8742,12 @@ function Workspace({
           ) : page === "Profile & Settings" ? (
             <UnifiedProfileSettings profile={currentProfile} role={role} />
           ) : (
-            <ModulePage onPage={setPage} page={page} role={role} />
+            <ModulePage
+              onPage={setPage}
+              page={page}
+              profile={currentProfile}
+              role={role}
+            />
           )}
           <footer className="mt-8 flex flex-col gap-3 border-t border-slate-200 py-5 text-xs text-slate-400 sm:flex-row sm:items-center">
             <p>EcoRoute prototype · Kigali, Rwanda</p>

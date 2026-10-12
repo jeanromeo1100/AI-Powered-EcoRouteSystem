@@ -11,8 +11,10 @@ import {
   CreditCard,
   Download,
   Eye,
+  EyeOff,
   FileText,
   GripVertical,
+  Lock,
   MapPin,
   MessageSquareText,
   MoreHorizontal,
@@ -28,6 +30,7 @@ import {
   X,
 } from "lucide-react"
 import type { Role } from "./App"
+import { generatePdfDocument, generateReceiptPdf } from "./utils/pdfGenerator"
 import {
   customers,
   locations,
@@ -1392,9 +1395,29 @@ export function CustomerPayments({
               ))}
             </div>
             <div className="mt-6 flex justify-center gap-2">
-              <button className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold">
+              <button
+                className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold hover:bg-slate-50 transition"
+                onClick={() => {
+                  generateReceiptPdf({
+                    receiptNo: payments[0]?.id || "RCT-2026-10482",
+                    customerName: "Jean Romeo",
+                    customerId: "CUS-2048",
+                    amount: "RWF 6,000",
+                    period: "October 2026",
+                    paymentMethod: method,
+                    reference: transactionReference || "TXN-2026-10482",
+                    date: new Date().toLocaleString("en-GB", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
+                  })
+                }}
+              >
                 <Download className="mr-2 inline" size={15} />
-                Download receipt
+                Download receipt (PDF)
               </button>
               <button
                 className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white"
@@ -1760,11 +1783,14 @@ export function EmployeesPage() {
   const { employees, addEmployee } = useStore()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [createdSuccess, setCreatedSuccess] = useState<string | null>(null)
   const [form, setForm] = useState<Employee>({
     id: `EMP-${Date.now().toString().slice(-4)}`,
     name: "",
     phone: "",
     email: "",
+    password: "",
     type: "Driver",
     department: "Operations",
     team: "Team Alpha",
@@ -1780,8 +1806,55 @@ export function EmployeesPage() {
       .toLowerCase()
       .includes(search.toLowerCase()),
   )
+
+  const canSave = Boolean(
+    form.name.trim() &&
+    form.email.trim() &&
+    form.password &&
+    form.password.length >= 6 &&
+    form.salary > 0
+  )
+
+  const handleSave = () => {
+    if (!canSave) return
+    addEmployee(form)
+    setCreatedSuccess(
+      `Employee account created for ${form.name}! Login Email: ${form.email} · Password has been assigned. The employee can now log in directly.`
+    )
+    setOpen(false)
+    setForm({
+      id: `EMP-${Date.now().toString().slice(-4)}`,
+      name: "",
+      phone: "",
+      email: "",
+      password: "",
+      type: "Driver",
+      department: "Operations",
+      team: "Team Alpha",
+      salary: 0,
+      salaryType: "Monthly fixed",
+      startDate: "2026-10-06",
+      status: "Active",
+    })
+  }
+
   return (
     <div className="space-y-4">
+      {createdSuccess && (
+        <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="text-emerald-700 shrink-0" size={18} />
+            <span>{createdSuccess}</span>
+          </div>
+          <button
+            onClick={() => setCreatedSuccess(null)}
+            className="rounded-lg p-1 text-emerald-700 hover:bg-emerald-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 text-slate-400" size={16} />
@@ -1793,8 +1866,11 @@ export function EmployeesPage() {
           />
         </div>
         <button
-          className="flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white"
-          onClick={() => setOpen(true)}
+          className="flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 transition"
+          onClick={() => {
+            setCreatedSuccess(null)
+            setOpen(true)
+          }}
         >
           <UserPlus size={16} />
           Add Employee
@@ -1828,7 +1904,7 @@ export function EmployeesPage() {
             <div className="flex">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
-                  New staff record
+                  New staff record & login account
                 </p>
                 <p className="mt-1 text-2xl font-bold">Add employee</p>
               </div>
@@ -1837,40 +1913,132 @@ export function EmployeesPage() {
               </button>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              {([
-                ["Full name", "name"],
-                ["Phone", "phone"],
-                ["Email", "email"],
-                ["Employee ID", "id"],
-                ["Department", "department"],
-                ["Team", "team"],
-                ["Monthly salary (RWF)", "salary"],
-                ["Start date", "startDate"],
-                ["Assigned vehicle (optional)", "vehicle"],
-              ] as [string, keyof Employee][]).map(([label, key]) => (
-                <label className="text-xs font-bold text-slate-600" key={key}>
-                  {label}
+              <label className="text-xs font-bold text-slate-600">
+                Full name
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="text"
+                  placeholder="e.g. Jean Damascene N."
+                  value={form.name || ""}
+                  onChange={(event) => set("name", event.target.value)}
+                />
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                Phone
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="text"
+                  placeholder="+250 788 xxx xxx"
+                  value={form.phone || ""}
+                  onChange={(event) => set("phone", event.target.value)}
+                />
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                Email
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="email"
+                  placeholder="employee@ecoroute.rw"
+                  value={form.email || ""}
+                  onChange={(event) => set("email", event.target.value)}
+                />
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                <span className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-emerald-800">
+                    <Lock size={13} />
+                    Password (required for employee login)
+                  </span>
+                  {form.password && form.password.length < 6 && (
+                    <span className="text-[10px] text-amber-600 font-normal">Min 6 characters</span>
+                  )}
+                </span>
+                <div className="relative mt-1.5">
                   <input
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm"
-                    type={
-                      key === "salary"
-                        ? "number"
-                        : key === "startDate"
-                          ? "date"
-                          : "text"
-                    }
-                    value={form[key] || ""}
-                    onChange={(event) =>
-                      set(
-                        key,
-                        key === "salary"
-                          ? Number(event.target.value)
-                          : event.target.value,
-                      )
-                    }
+                    className="w-full rounded-xl border border-slate-200 p-3 pr-10 text-sm focus:border-emerald-500 focus:outline-none"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Set employee login password"
+                    value={form.password || ""}
+                    onChange={(event) => set("password", event.target.value)}
                   />
-                </label>
-              ))}
+                  <button
+                    type="button"
+                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                    onClick={() => setShowPassword(!showPassword)}
+                    title={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] font-normal text-slate-500">
+                  Employee will use this email and password to log in.
+                </p>
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                Employee ID
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="text"
+                  value={form.id || ""}
+                  onChange={(event) => set("id", event.target.value)}
+                />
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                Department
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="text"
+                  value={form.department || ""}
+                  onChange={(event) => set("department", event.target.value)}
+                />
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                Team
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="text"
+                  value={form.team || ""}
+                  onChange={(event) => set("team", event.target.value)}
+                />
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                Monthly salary (RWF)
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="number"
+                  value={form.salary || ""}
+                  onChange={(event) => set("salary", Number(event.target.value))}
+                />
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                Start date
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="date"
+                  value={form.startDate || ""}
+                  onChange={(event) => set("startDate", event.target.value)}
+                />
+              </label>
+
+              <label className="text-xs font-bold text-slate-600">
+                Assigned vehicle (optional)
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-500 focus:outline-none"
+                  type="text"
+                  placeholder="e.g. RW 412 A"
+                  value={form.vehicle || ""}
+                  onChange={(event) => set("vehicle", event.target.value)}
+                />
+              </label>
+
               {([
                 [
                   "Employee type",
@@ -1907,6 +2075,16 @@ export function EmployeesPage() {
                   </label>
                 ),
               )}
+
+              <div className="sm:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs text-emerald-950 flex items-start gap-2.5">
+                <ShieldCheck size={18} className="text-emerald-700 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Authorized login account creation</p>
+                  <p className="mt-0.5 text-emerald-800">
+                    The employee will be authorized immediately. They can sign in on the login portal using their email and the password defined above to access their assigned workspace.
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button
@@ -1916,14 +2094,11 @@ export function EmployeesPage() {
                 Cancel
               </button>
               <button
-                className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-40"
-                disabled={!form.name || !form.email || !form.salary}
-                onClick={() => {
-                  addEmployee(form)
-                  setOpen(false)
-                }}
+                className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-40 hover:bg-emerald-800 transition"
+                disabled={!canSave}
+                onClick={handleSave}
               >
-                Save employee
+                Save employee & create account
               </button>
             </div>
           </div>
@@ -2068,21 +2243,58 @@ export function PayrollPage({ mode }: { mode: "Manager" | "Finance" }) {
 export function ActivityPage({ role }: { role: Role }) {
   const { logs, addLog } = useStore()
   const [search, setSearch] = useState("")
+
+  const defaultNames: Record<string, string> = {
+    Admin: "System Administrator",
+    Manager: "Diane Mukamana",
+    Finance: "Claudine Uwase",
+    Employee: "Eric Niyonzima",
+    Customer: "Jean Romeo",
+  }
+  const myName = defaultNames[role] || "System Administrator"
+
+  // Filter strictly to current user's activities
   const visible = logs.filter(
     (item) =>
-      (role === "Admin" ||
-        (role === "Manager" && !["Security"].includes(item.module)) ||
-        (role === "Finance" &&
-          ["Payments", "Invoices", "Billing", "Payroll", "Reports"].includes(
-            item.module,
-          )) ||
-        (role === "Employee" && item.role === "Employee") ||
-        (role === "Customer" && item.role === "Customer")) &&
+      (item.user.toLowerCase() === myName.toLowerCase() || item.role === role) &&
       Object.values(item)
         .join(" ")
         .toLowerCase()
         .includes(search.toLowerCase()),
   )
+
+  const exportPdf = () => {
+    generatePdfDocument({
+      title: `OFFICIAL ACTIVITY AUDIT TRAIL: ${myName.toUpperCase()}`,
+      subtitle: `AI-Powered EcoRoute · Personal Activity Trail (${role})`,
+      filename: `ecoroute-activity-${role.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.pdf`,
+      generatedBy: myName,
+      role,
+      headers: ["Date/time", "User", "Role", "Action", "Module", "Record", "Device"],
+      rows: visible.map((item) => [
+        item.time,
+        item.user,
+        item.role,
+        item.action,
+        item.module,
+        item.record,
+        item.device || "Web app",
+      ]),
+      summaryCards: [
+        { label: "Account Holder", value: myName },
+        { label: "Role Category", value: role },
+        { label: "Total Activities", value: String(visible.length) },
+      ],
+    })
+    addLog({
+      user: myName,
+      role,
+      action: "Report exported (PDF)",
+      module: "Reports",
+      record: `Activity Log PDF (${visible.length} records)`,
+    })
+  }
+
   const exportCsv = () => {
     const csv = [
       ["Date/time", "User", "Role", "Action", "Module", "Record", "Old value", "New value", "Device"],
@@ -2103,41 +2315,46 @@ export function ActivityPage({ role }: { role: Role }) {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }))
     const link = document.createElement("a")
     link.href = url
-    link.download = "ecoroute-activity.csv"
+    link.download = `ecoroute-activity-${role.toLowerCase()}.csv`
     link.click()
     URL.revokeObjectURL(url)
     addLog({
-      user:
-        role === "Admin"
-          ? "System Administrator"
-          : role === "Manager"
-            ? "Diane Mukamana"
-            : "Claudine Uwase",
+      user: myName,
       role,
-      action: "Report exported",
+      action: "Report exported (CSV)",
       module: "Reports",
       record: "Activity Log CSV",
     })
   }
   return (
     <div className="space-y-4">
-      <div className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-col sm:flex-row gap-3 rounded-2xl border border-slate-200 bg-white p-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 text-slate-400" size={16} />
           <input
             className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 text-sm"
-            placeholder="Search activity"
+            placeholder="Search your activity"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
-        <button
-          className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-bold"
-          onClick={exportCsv}
-        >
-          <Download size={14} />
-          Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-1.5 rounded-xl border border-emerald-600 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+            onClick={exportPdf}
+            title="Download valid PDF document that opens cleanly in any PDF reader"
+          >
+            <Download size={14} />
+            Export PDF
+          </button>
+          <button
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold hover:bg-slate-50"
+            onClick={exportCsv}
+          >
+            <Download size={14} />
+            Export CSV
+          </button>
+        </div>
       </div>
       <DataTable
         columns={[
@@ -2482,7 +2699,7 @@ export function ConnectedDashboard({
       (item) =>
         item.customerId === customerId ||
         (profile?.email &&
-          item.customer?.toLowerCase().includes(customerName.toLowerCase())),
+          item.customerId.toLowerCase().includes(customerId.toLowerCase())),
     )
     const unpaid = mine.filter((item) => item.status !== "Paid")
     const lastMessage = messages.find((item) => item.role === "Customer")
@@ -2780,11 +2997,47 @@ export function PaymentsBilling({ mode }: { mode: "Manager" | "Finance" }) {
                   Receipt {saved.id} · Reference {saved.reference}
                 </p>
                 <div className="mt-6 flex justify-center gap-2">
-                  <button className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold">
-                    Download receipt
+                  <button
+                    className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold hover:bg-slate-50 transition"
+                    onClick={() => {
+                      generateReceiptPdf({
+                        receiptNo: saved.id,
+                        customerName: saved.customerId,
+                        customerId: saved.customerId,
+                        amount: saved.amount,
+                        period: "October 2026",
+                        paymentMethod: saved.method,
+                        reference: saved.reference,
+                        date: saved.date,
+                      })
+                    }}
+                  >
+                    Download receipt (PDF)
                   </button>
-                  <button className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold">
-                    Download Statement / Report
+                  <button
+                    className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold hover:bg-slate-50 transition"
+                    onClick={() => {
+                      generatePdfDocument({
+                        title: `PAYMENT STATEMENT: ${saved.customerId.toUpperCase()}`,
+                        subtitle: "Smart Waste Collection, Route, Optimization",
+                        filename: `statement-${saved.id.toLowerCase()}.pdf`,
+                        generatedBy: saved.recordedBy,
+                        role: "Finance",
+                        headers: ["Field", "Transaction Record Details"],
+                        rows: [
+                          ["Receipt Number", saved.id],
+                          ["Customer Account", saved.customerId],
+                          ["Payment Amount", `RWF ${saved.amount.toLocaleString()}`],
+                          ["Payment Provider", saved.method],
+                          ["Gateway Reference", saved.reference],
+                          ["Recorded Date", saved.date],
+                          ["Recorded By", saved.recordedBy],
+                          ["Verification Status", "Certified & Credited"],
+                        ],
+                      })
+                    }}
+                  >
+                    Download Statement (PDF)
                   </button>
                   <button
                     className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white"

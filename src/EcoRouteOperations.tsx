@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { generatePdfDocument } from "./utils/pdfGenerator"
 import {
   Activity,
   AlertTriangle,
@@ -452,6 +453,30 @@ const reportRows = [
 ]
 
 function downloadReport(name: string, format: "PDF" | "Excel") {
+  if (format === "PDF") {
+    generatePdfDocument({
+      title: `OPERATIONAL SUMMARY: ${name.toUpperCase()}`,
+      subtitle: "Smart Waste Collection, Route, Optimization",
+      filename: `${name.toLowerCase().replace(/ /g, "-")}.pdf`,
+      generatedBy: "Operations Command",
+      role: "Manager",
+      headers: ["Operational Metric", "Recorded Figure", "Period Notes"],
+      rows: [
+        ["Planned Collections", `${KIGALI_OPERATIONS.planned} pickups`, "01 Oct - 06 Oct 2026"],
+        ["Completed Collections", `${KIGALI_OPERATIONS.completed} pickups`, "95.5% Completion rate"],
+        ["Missed Collections", `${KIGALI_OPERATIONS.missed} pickups`, "Resolved within SLA"],
+        ["Nduba Waste Hauled", `${KIGALI_OPERATIONS.tonnes} tonnes`, "Weighbridge certified"],
+        ["Reporting Period", "01 Oct 2026 - 06 Oct 2026", "Kigali Metropolitan"],
+      ],
+      summaryCards: [
+        { label: "Report", value: name },
+        { label: "Total Hauled", value: `${KIGALI_OPERATIONS.tonnes} T` },
+        { label: "Completed Pickups", value: String(KIGALI_OPERATIONS.completed) },
+      ],
+    })
+    return
+  }
+
   const content = [
     `EcoRoute ${name}`,
     `Period,01 Oct 2026 - 06 Oct 2026`,
@@ -463,9 +488,7 @@ function downloadReport(name: string, format: "PDF" | "Excel") {
   const blob = new Blob([content], { type: "text/csv" })
   const link = document.createElement("a")
   link.href = URL.createObjectURL(blob)
-  link.download = `${name.toLowerCase().replace(/ /g, "-")}.${
-    format === "PDF" ? "pdf" : "csv"
-  }`
+  link.download = `${name.toLowerCase().replace(/ /g, "-")}.csv`
   link.click()
   URL.revokeObjectURL(link.href)
 }

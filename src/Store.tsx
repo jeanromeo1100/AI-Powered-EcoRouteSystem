@@ -108,6 +108,7 @@ export type Employee = {
   name: string
   phone: string
   email: string
+  password?: string
   type: string
   department: string
   team: string
@@ -1337,10 +1338,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...accounts,
       ]),
     )
+    if (employee.email) {
+      try {
+        const normalizedEmail = employee.email.trim().toLowerCase()
+        const existing = JSON.parse(
+          localStorage.getItem("ecoroute-created-accounts") ?? "[]",
+        ) as Array<{
+          email: string
+          password: string
+          role: string
+          name: string
+          phone?: string
+          category?: string
+          assignment?: string
+          task?: string
+        }>
+        const employeeRole =
+          employee.type === "Finance Officer" || employee.type === "Finance"
+            ? "Finance"
+            : "Employee"
+        const filtered = existing.filter((acc) => acc.email !== normalizedEmail)
+        localStorage.setItem(
+          "ecoroute-created-accounts",
+          JSON.stringify([
+            ...filtered,
+            {
+              email: normalizedEmail,
+              password: employee.password || "employee123",
+              role: employeeRole,
+              name: employee.name,
+              phone: employee.phone,
+              category: employee.type,
+              assignment: `${employee.team || "Team Alpha"} · ${employee.vehicle || "Operations"}`,
+              task: `Assigned as ${employee.type} (${employee.department || "Operations"})`,
+            },
+          ]),
+        )
+      } catch (err) {
+        console.error("Failed to sync employee account", err)
+      }
+    }
     addLog({
       user: "Diane Mukamana",
       role: "Manager",
-      action: "Employee created",
+      action: `Employee account created for ${employee.name} (${employee.type}) with login access`,
       module: "Employees",
       record: employee.id,
     })

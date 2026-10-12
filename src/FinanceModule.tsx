@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { generatePdfDocument, generateReceiptPdf } from "./utils/pdfGenerator"
 import {
   Activity,
   AlertTriangle,
@@ -905,6 +906,24 @@ function Modal({
       </div>
     </div>
   )
+}
+
+function exportPdfRows(name: string, rows: Row[]) {
+  const keys = Object.keys(rows[0] ?? {})
+  generatePdfDocument({
+    title: `FINANCE RECORD: ${name.toUpperCase()}`,
+    subtitle: "Smart Waste Collection, Route, Optimization",
+    filename: `ecoroute-finance-${name.toLowerCase().replace(/ /g, "-")}.pdf`,
+    generatedBy: "Claudine Uwase",
+    role: "Finance",
+    headers: keys,
+    rows: rows.map((r) => keys.map((k) => String(r[k] ?? ""))),
+    summaryCards: [
+      { label: "Module", value: name },
+      { label: "Records", value: String(rows.length) },
+      { label: "Ledger", value: "Verified" },
+    ],
+  })
 }
 
 function exportRows(name: string, rows: Row[]) {
@@ -2627,6 +2646,11 @@ export function FinancePage({
       ? { ...baseDefinition, rows: [...manualPayments, ...baseDefinition.rows] }
       : baseDefinition
   const handleAction = (action: string, row: Row) => {
+    if (action.toLowerCase().includes("pdf")) {
+      exportPdfRows(resolvedPage, [row])
+      setNotice(`Official PDF document generated and downloaded for ${Object.values(row)[0]}.`)
+      return
+    }
     if (
       action.toLowerCase().includes("download") ||
       action.toLowerCase().includes("export")

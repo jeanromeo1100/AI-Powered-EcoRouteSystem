@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import { useStore } from "./Store"
 import { Modal } from "./Modal"
+import { generatePdfDocument } from "./utils/pdfGenerator"
 
 export type ReportType =
   | "Collection"
@@ -200,8 +201,54 @@ export function ReportsEnhanced({
       ].map((r) => r.join(",")).join("\n")
     }
 
-    const mime = format === "PDF" ? "application/pdf" : format === "Excel" ? "application/vnd.ms-excel" : "text/csv"
-    const ext = format === "PDF" ? "pdf" : format === "Excel" ? "xlsx" : "csv"
+    // If PDF format is requested, generate a genuine, valid binary PDF document
+    if (format === "PDF") {
+      let tableHeaders: string[] = []
+      let tableRows: (string | number)[][] = []
+
+      if (selectedType === "Collection") {
+        tableHeaders = ["ID", "Customer", "Zone", "Driver", "Vehicle", "Status", "Date"]
+        tableRows = collections.slice(0, 30).map((c) => [c.id, c.customerName, c.zone, c.driver, c.vehicle, c.status, c.date])
+      } else if (selectedType === "Billing & payments") {
+        tableHeaders = ["Invoice ID", "Customer ID", "Period", "Plan", "Amount (RWF)", "Status"]
+        tableRows = invoices.slice(0, 30).map((i) => [i.id, i.customerId, i.period, i.plan, i.amount, i.status])
+      } else if (selectedType === "Landfill trips") {
+        tableHeaders = ["Ticket No", "Vehicle", "Driver", "Zone", "Net Tonnes", "Status"]
+        tableRows = landfillTrips.map((l) => [l.ticketNo, l.vehicle, l.driver, l.zone, l.netWeightTonnes, l.status])
+      } else {
+        tableHeaders = ["Metric Indicator", "Quantitative Value", "Measurement Unit"]
+        tableRows = [
+          ["Collections Completed", metrics.collectionsCompletedCount, "pickups"],
+          ["Total Registered Customers", metrics.customersCount, "accounts"],
+          ["Overdue Accounts Total", `RWF ${metrics.overdueTotal.toLocaleString()}`, "RWF"],
+          ["Landfill Waste Hauled", `${metrics.landfillTonnesTotal} tonnes`, "tonnes"],
+          ["Km Saved via AI Routing", `${metrics.routeEfficiency.kmSaved} km`, "km"],
+        ]
+      }
+
+      generatePdfDocument({
+        title: `OPERATIONAL REPORT: ${selectedTemplate.toUpperCase()}`,
+        subtitle: "Smart Waste Collection, Route, Optimization",
+        filename: `ecoroute-${selectedType.toLowerCase().replace(/\s+/g, "-")}-report.pdf`,
+        generatedBy: role,
+        role,
+        headers: tableHeaders,
+        rows: tableRows,
+        summaryCards: [
+          { label: "Category", value: selectedType },
+          { label: "Total Rows", value: String(tableRows.length) },
+          { label: "Format", value: "Standard PDF" },
+          { label: "Authenticity", value: "Verified" },
+        ],
+      })
+
+      setToast(`Export completed! Downloaded valid PDF file: ${selectedTemplate}.`)
+      setTimeout(() => setToast(null), 4000)
+      return
+    }
+
+    const mime = format === "Excel" ? "application/vnd.ms-excel" : "text/csv"
+    const ext = format === "Excel" ? "csv" : "csv"
     const blob = new Blob([csvData], { type: mime })
     const link = document.createElement("a")
     link.href = URL.createObjectURL(blob)
